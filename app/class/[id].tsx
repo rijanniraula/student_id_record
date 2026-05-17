@@ -3,13 +3,18 @@ import {
   createStudent,
   deleteStudent,
   getStudentsByClass,
+  importStudentsForClass,
   updateStudent,
 } from "@/database/Students";
+import { parseStudentCsv } from "@/utils/parseStudentCsv";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
@@ -39,6 +44,7 @@ export default function ClassStudentsScreen() {
   const [phone, setPhone] = useState("");
   const [dob, setDob] = useState("");
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!classId || Number.isNaN(classId)) return;
@@ -102,6 +108,60 @@ export default function ClassStudentsScreen() {
     await loadData();
   }, [classId, closeModal, dob, editingStudent, loadData, name, phone]);
 
+  const handleImport = useCallback(async () => {
+    if (!classId || Number.isNaN(classId) || importing) return;
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          "text/csv",
+          "text/comma-separated-values",
+          "application/csv",
+          "application/vnd.ms-excel",
+        ],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets[0]) return;
+
+      setImporting(true);
+      const fileUri = result.assets[0].uri;
+      const content = await FileSystem.readAsStringAsync(fileUri);
+      const { rows, errors } = parseStudentCsv(content);
+
+      if (rows.length === 0) {
+        Alert.alert(
+          "Import failed",
+          errors.length > 0
+            ? errors.slice(0, 5).join("\n")
+            : "No valid rows found in the CSV file."
+        );
+        return;
+      }
+
+      const { created, updated } = await importStudentsForClass(classId, rows);
+      await loadData();
+
+      const summary = `Added ${created} student${created === 1 ? "" : "s"}, updated ${updated}.`;
+      if (errors.length > 0) {
+        Alert.alert(
+          "Import completed with warnings",
+          `${summary}\n\n${errors.slice(0, 5).join("\n")}${
+            errors.length > 5 ? `\n…and ${errors.length - 5} more.` : ""
+          }`
+        );
+      } else {
+        Alert.alert("Import complete", summary);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not import CSV file.";
+      Alert.alert("Import failed", message);
+    } finally {
+      setImporting(false);
+    }
+  }, [classId, importing, loadData]);
+
   const handleDelete = useCallback(
     (item: StudentRow) => {
       Alert.alert(
@@ -129,14 +189,30 @@ export default function ClassStudentsScreen() {
         options={{
           title: className,
           headerRight: () => (
-            <Pressable
-              onPress={openAddModal}
-              className="mr-2 flex-row items-center rounded-lg bg-blue-600 px-3 py-1.5 active:opacity-80"
-            >
-              <Text className="text-sm font-semibold text-white">
-                + Add Student
-              </Text>
-            </Pressable>
+            <View className="mr-2 flex-row items-center gap-2">
+              <Pressable
+                onPress={handleImport}
+                disabled={importing}
+                className="flex-row items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 active:opacity-80 disabled:opacity-50"
+              >
+                {importing ? (
+                  <ActivityIndicator size="small" color="#2563eb" />
+                ) : (
+                  <Text className="text-sm font-semibold text-gray-800">
+                    Import
+                  </Text>
+                )}
+              </Pressable>
+              <Pressable
+                onPress={openAddModal}
+                disabled={importing}
+                className="flex-row items-center rounded-lg bg-blue-600 px-3 py-1.5 active:opacity-80 disabled:opacity-50"
+              >
+                <Text className="text-sm font-semibold text-white">
+                  + Add Student
+                </Text>
+              </Pressable>
+            </View>
           ),
         }}
       />
@@ -149,8 +225,8 @@ export default function ClassStudentsScreen() {
           ListEmptyComponent={
             <View className="flex-1 items-center justify-center py-24">
               <Text className="text-base text-gray-500">No students yet</Text>
-              <Text className="mt-1 text-sm text-gray-400">
-                Tap + Add Student to add one
+              <Text className="mt-1 text-center text-sm text-gray-400">
+                Tap + Add Student or Import a CSV
               </Text>
             </View>
           }
