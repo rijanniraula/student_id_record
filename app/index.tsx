@@ -4,7 +4,7 @@ import {
   getClasses,
   updateClass,
 } from "@/database/Classes";
-import { Ionicons } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
@@ -143,14 +143,14 @@ export default function ClassesScreen() {
                 hitSlop={8}
                 className="mr-3 p-1 active:opacity-60"
               >
-                <Ionicons name="pencil" size={20} color="#2563eb" />
+                <Feather name="edit" size={16} color="blue" />
               </Pressable>
               <Pressable
                 onPress={() => handleDelete(item)}
                 hitSlop={8}
                 className="p-1 active:opacity-60"
               >
-                <Ionicons name="trash-outline" size={20} color="#dc2626" />
+                <Feather name="trash-2" size={16} color="red" />
               </Pressable>
             </View>
           )}

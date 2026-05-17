@@ -17,12 +17,13 @@ import {
   photoFileExists,
 } from "@/utils/studentPhoto";
 import { Ionicons } from "@expo/vector-icons";
+import Feather from '@expo/vector-icons/Feather';
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -35,6 +36,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Entypo from '@expo/vector-icons/Entypo';
 
 type StudentRow = {
   id: number;
@@ -59,6 +61,25 @@ export default function ClassStudentsScreen() {
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredStudents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return students;
+
+    return students.filter((student) => {
+      const haystack = [
+        student.name,
+        String(student.id),
+        student.phone ?? "",
+        student.dob ?? "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [searchQuery, students]);
 
   const loadData = useCallback(async () => {
     if (!classId || Number.isNaN(classId)) return;
@@ -274,30 +295,25 @@ export default function ClassStudentsScreen() {
                 {exporting ? (
                   <ActivityIndicator size="small" color="#2563eb" />
                 ) : (
+                  <View className="flex-row items-center gap-1">
                   <Ionicons name="download-outline" size={20} color="#2563eb" />
+                  <Text> Export </Text>
+                  </View>
                 )}
               </Pressable>
               <Pressable
                 onPress={handleImport}
                 disabled={importing || exporting}
-                className="flex-row items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 active:opacity-80 disabled:opacity-50"
+                className="flex-row items-center rounded-lg border border-gray-300 bg-white p-1 active:opacity-80 disabled:opacity-50"
               >
                 {importing ? (
                   <ActivityIndicator size="small" color="#2563eb" />
                 ) : (
-                  <Text className="text-sm font-semibold text-gray-800">
-                    Import
-                  </Text>
+                    <View className="flex-row items-center gap-1">
+                      <Ionicons name="cloud-upload-outline" size={20} color="#2563eb" />
+                      <Text> Import </Text>
+                    </View> 
                 )}
-              </Pressable>
-              <Pressable
-                onPress={openAddModal}
-                disabled={importing || exporting}
-                className="flex-row items-center rounded-lg bg-blue-600 px-3 py-1.5 active:opacity-80 disabled:opacity-50"
-              >
-                <Text className="text-sm font-semibold text-white">
-                  + Add Student
-                </Text>
               </Pressable>
             </View>
           ),
@@ -306,14 +322,55 @@ export default function ClassStudentsScreen() {
 
       <View className="flex-1 bg-gray-50">
         <FlatList
-          data={students}
+          data={filteredStudents}
           keyExtractor={(item) => String(item.id)}
-          contentContainerClassName="grow px-4 py-3"
+          contentContainerClassName="grow px-4 pb-3"
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            <View className="py-4 flex-row items-center justify-between">
+              <View className="w-[83%] flex-row items-center rounded-xl border border-gray-300 bg-white px-3">
+                <Ionicons name="search" size={20} color="#9ca3af" />
+                <TextInput
+                  className="ml-2 flex-1 py-2.5 text-base text-gray-900"
+                  placeholder="Search by name, ID, phone, or DOB"
+                  placeholderTextColor="#9ca3af"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  clearButtonMode="while-editing"
+                />
+                {searchQuery.length > 0 && (
+                  <Pressable
+                    onPress={() => setSearchQuery("")}
+                    hitSlop={8}
+                    className="p-1 active:opacity-60"
+                  >
+                    <Ionicons name="close-circle" size={20} color="#9ca3af" />
+                  </Pressable>
+                )}
+              </View>
+              <Pressable
+                onPress={openAddModal}
+                disabled={importing || exporting}
+                className="w-[15%] flex-row items-center justify-center rounded-lg bg-blue-600 active:opacity-80 disabled:opacity-50 p-2"
+              >
+                <Entypo name="plus" size={18} color="white" />
+                <Text className="text-sm font-semibold text-white">Add</Text>
+              </Pressable>
+            </View>
+          }
           ListEmptyComponent={
-            <View className="flex-1 items-center justify-center py-24">
-              <Text className="text-base text-gray-500">No students yet</Text>
+            <View className="flex-1 items-center justify-center py-16">
+              <Text className="text-base text-gray-500">
+                {students.length === 0
+                  ? "No students yet"
+                  : "No students match your search"}
+              </Text>
               <Text className="mt-1 text-center text-sm text-gray-400">
-                Tap + Add Student or Import a CSV
+                {students.length === 0
+                  ? "Tap + Add Student or Import a CSV"
+                  : "Try a different search term"}
               </Text>
             </View>
           }
@@ -351,14 +408,14 @@ export default function ClassStudentsScreen() {
                 hitSlop={8}
                 className="mr-3 p-1 active:opacity-60"
               >
-                <Ionicons name="pencil" size={20} color="#2563eb" />
+                <Feather name="edit" size={16} color="blue" />
               </Pressable>
               <Pressable
                 onPress={() => handleDelete(item)}
                 hitSlop={8}
                 className="p-1 active:opacity-60"
               >
-                <Ionicons name="trash-outline" size={20} color="#dc2626" />
+                <Feather name="trash-2" size={16} color="red" />
               </Pressable>
             </View>
           )}
