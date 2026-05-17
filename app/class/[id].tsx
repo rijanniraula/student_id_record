@@ -6,7 +6,12 @@ import {
   importStudentsForClass,
   updateStudent,
 } from "@/database/Students";
+import { getLatestPhotosByClassId } from "@/database/Photos";
 import { parseStudentCsv } from "@/utils/parseStudentCsv";
+import {
+  getStudentPhotoUri,
+  photoFileExists,
+} from "@/utils/studentPhoto";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
@@ -17,8 +22,10 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
   Pressable,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -30,6 +37,7 @@ type StudentRow = {
   name: string;
   phone: string | null;
   dob: string | null;
+  photoUri: string | null;
 };
 
 export default function ClassStudentsScreen() {
@@ -50,10 +58,33 @@ export default function ClassStudentsScreen() {
     if (!classId || Number.isNaN(classId)) return;
 
     const cls = (await getClassById(classId)) as { name: string } | null;
-    setClassName(cls?.name ?? "Class");
+    const resolvedClassName = cls?.name ?? "Class";
+    setClassName(resolvedClassName);
 
-    const rows = (await getStudentsByClass(classId)) as StudentRow[];
-    setStudents(rows);
+    const rows = (await getStudentsByClass(classId)) as Omit<
+      StudentRow,
+      "photoUri"
+    >[];
+    const photoMap = await getLatestPhotosByClassId(classId);
+
+    const withPhotos: StudentRow[] = await Promise.all(
+      rows.map(async (student) => {
+        let photoUri: string | null = photoMap[student.id] ?? null;
+
+        if (!(photoUri && (await photoFileExists(photoUri)))) {
+          const fallback = getStudentPhotoUri(
+            resolvedClassName,
+            student.name,
+            student.id
+          );
+          photoUri = (await photoFileExists(fallback)) ? fallback : null;
+        }
+
+        return { ...student, photoUri };
+      })
+    );
+
+    setStudents(withPhotos);
   }, [classId]);
 
   useFocusEffect(
@@ -232,18 +263,32 @@ export default function ClassStudentsScreen() {
           }
           renderItem={({ item }) => (
             <View className="mb-2 flex-row items-center rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+              {item.photoUri ? (
+                <Image
+                  source={{ uri: item.photoUri }}
+                  style={styles.thumbnail}
+                />
+              ) : (
+                <View style={styles.thumbnailPlaceholder}>
+                  <Ionicons name="person" size={22} color="#9ca3af" />
+                </View>
+              )}
               <Pressable
                 onPress={() => router.push(`/student/${item.id}`)}
-                className="mr-2 flex-1 active:opacity-70"
+                className="mx-3 flex-1 active:opacity-70"
               >
                 <Text className="text-base font-medium text-gray-900">
                   {item.name}
                 </Text>
-                {(item.phone || item.dob) && (
-                  <Text className="mt-0.5 text-sm text-gray-500">
-                    {[item.phone, item.dob].filter(Boolean).join(" · ")}
+                <Text className="mt-0.5 text-sm text-gray-500">
+                  ID: {item.id ?? "N/A"}
+                </Text>
+                  <Text className="mt-0.5 text-sm text-gray-400">
+                  Phone: {item.phone ?? "N/A"}
                   </Text>
-                )}
+                  <Text className="mt-0.5 text-sm text-gray-400">
+                  DOB: {item.dob ?? "N/A"}
+                  </Text>
               </Pressable>
               <Pressable
                 onPress={() => openEditModal(item)}
@@ -335,3 +380,20 @@ export default function ClassStudentsScreen() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  thumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
+  },
+  thumbnailPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

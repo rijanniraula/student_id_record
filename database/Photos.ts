@@ -19,6 +19,31 @@ export const getPhotoByStudentId = async (studentId: number) => {
   );
 };
 
+export const getLatestPhotosByClassId = async (
+  classId: number
+): Promise<Record<number, string>> => {
+  const rows = await db.getAllAsync<{ student_id: number; path: string }>(
+    `
+    SELECT p.student_id, p.path
+    FROM photos p
+    INNER JOIN students s ON s.id = p.student_id
+    WHERE s.class_id = ?
+      AND p.id = (
+        SELECT MAX(p2.id)
+        FROM photos p2
+        WHERE p2.student_id = p.student_id
+      );
+    `,
+    [classId]
+  );
+
+  const map: Record<number, string> = {};
+  for (const row of rows) {
+    map[row.student_id] = row.path;
+  }
+  return map;
+};
+
 export const upsertStudentPhoto = async (studentId: number, path: string) => {
   const existing = await getPhotoByStudentId(studentId);
 

@@ -19,10 +19,10 @@ export const sanitizePathSegment = (value: string): string => {
 };
 
 const getPhotoFileName = (studentName: string, studentId: number): string =>
-  `${sanitizePathSegment(studentName)}_${studentId}.jpg`;
+  `${studentId}_${sanitizePathSegment(studentName)}.jpg`;
 
 const getPhotoBaseName = (studentName: string, studentId: number): string =>
-  `${sanitizePathSegment(studentName)}_${studentId}`;
+  `${studentId}_${sanitizePathSegment(studentName)}`;
 
 /** iOS / fallback file path (Documents/id-mgmt/...). */
 export const getStudentPhotoUri = (
