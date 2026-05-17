@@ -13,6 +13,17 @@ export const getClasses = async () => {
   )
 }
 
+export const getClassById = async (id: number) => {
+  return await db.getFirstAsync('SELECT * FROM classes WHERE id = ?;', [id])
+}
+
+export const updateClass = async (id: number, name: string) => {
+  return await db.runAsync(
+    'UPDATE classes SET name = ? WHERE id = ?;',
+    [name, id]
+  )
+}
+
 export const deleteClass = async (id: number) => {
   return await db.runAsync(
     'DELETE FROM classes WHERE id = ?;',

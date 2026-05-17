@@ -22,6 +22,8 @@ export const initDatabase = async () => {
         class_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         roll_number TEXT,
+        phone TEXT,
+        dob TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
         FOREIGN KEY (class_id)
@@ -44,8 +46,24 @@ export const initDatabase = async () => {
       );
     `)
 
+    await migrateStudentsTable()
+
     console.log('Database initialized')
   } catch (error) {
     console.log('DB INIT ERROR:', error)
+  }
+}
+
+const migrateStudentsTable = async () => {
+  const columns = await db.getAllAsync<{ name: string }>(
+    'PRAGMA table_info(students);'
+  )
+  const names = new Set(columns.map((c) => c.name))
+
+  if (!names.has('phone')) {
+    await db.execAsync('ALTER TABLE students ADD COLUMN phone TEXT;')
+  }
+  if (!names.has('dob')) {
+    await db.execAsync('ALTER TABLE students ADD COLUMN dob TEXT;')
   }
 }
