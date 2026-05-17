@@ -7,6 +7,10 @@ import {
   updateStudent,
 } from "@/database/Students";
 import { getLatestPhotosByClassId } from "@/database/Photos";
+import {
+  buildClassStudentsCsv,
+  getClassExportFileName,
+} from "@/utils/exportStudentCsv";
 import { parseStudentCsv } from "@/utils/parseStudentCsv";
 import {
   getStudentPhotoUri,
@@ -16,6 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
@@ -53,6 +58,7 @@ export default function ClassStudentsScreen() {
   const [dob, setDob] = useState("");
   const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!classId || Number.isNaN(classId)) return;
@@ -139,8 +145,46 @@ export default function ClassStudentsScreen() {
     await loadData();
   }, [classId, closeModal, dob, editingStudent, loadData, name, phone]);
 
+  const handleExport = useCallback(async () => {
+    if (exporting || importing) return;
+
+    if (students.length === 0) {
+      Alert.alert("Nothing to export", "This class has no students yet.");
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const csv = buildClassStudentsCsv(students);
+      const fileName = getClassExportFileName(className);
+      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, csv, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Alert.alert("Export unavailable", "Sharing is not available on this device.");
+        return;
+      }
+
+      await Sharing.shareAsync(fileUri, {
+        mimeType: "text/csv",
+        dialogTitle: `Export ${fileName}`,
+        UTI: "public.comma-separated-values-text",
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not export CSV file.";
+      Alert.alert("Export failed", message);
+    } finally {
+      setExporting(false);
+    }
+  }, [className, exporting, importing, students]);
+
   const handleImport = useCallback(async () => {
-    if (!classId || Number.isNaN(classId) || importing) return;
+    if (!classId || Number.isNaN(classId) || importing || exporting) return;
 
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -191,7 +235,7 @@ export default function ClassStudentsScreen() {
     } finally {
       setImporting(false);
     }
-  }, [classId, importing, loadData]);
+  }, [classId, exporting, importing, loadData]);
 
   const handleDelete = useCallback(
     (item: StudentRow) => {
@@ -222,8 +266,20 @@ export default function ClassStudentsScreen() {
           headerRight: () => (
             <View className="mr-2 flex-row items-center gap-2">
               <Pressable
+                onPress={handleExport}
+                disabled={importing || exporting}
+                hitSlop={6}
+                className="items-center justify-center rounded-lg border border-gray-300 bg-white p-1 active:opacity-80 disabled:opacity-50"
+              >
+                {exporting ? (
+                  <ActivityIndicator size="small" color="#2563eb" />
+                ) : (
+                  <Ionicons name="download-outline" size={20} color="#2563eb" />
+                )}
+              </Pressable>
+              <Pressable
                 onPress={handleImport}
-                disabled={importing}
+                disabled={importing || exporting}
                 className="flex-row items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 active:opacity-80 disabled:opacity-50"
               >
                 {importing ? (
@@ -236,7 +292,7 @@ export default function ClassStudentsScreen() {
               </Pressable>
               <Pressable
                 onPress={openAddModal}
-                disabled={importing}
+                disabled={importing || exporting}
                 className="flex-row items-center rounded-lg bg-blue-600 px-3 py-1.5 active:opacity-80 disabled:opacity-50"
               >
                 <Text className="text-sm font-semibold text-white">
