@@ -1,11 +1,13 @@
+import { getClassById } from "@/database/Classes";
 import {
-  createClass,
-  deleteClass,
-  getClasses,
-  updateClass,
-} from "@/database/Classes";
+  createStudent,
+  deleteStudent,
+  getStudentsByClass,
+  updateStudent,
+} from "@/database/Students";
 import { Ionicons } from "@expo/vector-icons";
-import { Stack, useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   Alert,
@@ -16,99 +18,123 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
 
-type ClassRow = {
+type StudentRow = {
   id: number;
+  class_id: number;
   name: string;
+  phone: string | null;
+  dob: string | null;
 };
 
-export default function ClassesScreen() {
+export default function ClassStudentsScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const classId = Number(id);
   const router = useRouter();
-  const [classes, setClasses] = useState<ClassRow[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [className, setClassName] = useState("");
-  const [editingClass, setEditingClass] = useState<ClassRow | null>(null);
 
-  const loadClasses = useCallback(async () => {
-    const rows = (await getClasses()) as ClassRow[];
-    setClasses(rows);
-  }, []);
+  const [className, setClassName] = useState("");
+  const [students, setStudents] = useState<StudentRow[]>([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [dob, setDob] = useState("");
+  const [editingStudent, setEditingStudent] = useState<StudentRow | null>(null);
+
+  const loadData = useCallback(async () => {
+    if (!classId || Number.isNaN(classId)) return;
+
+    const cls = (await getClassById(classId)) as { name: string } | null;
+    setClassName(cls?.name ?? "Class");
+
+    const rows = (await getStudentsByClass(classId)) as StudentRow[];
+    setStudents(rows);
+  }, [classId]);
 
   useFocusEffect(
     useCallback(() => {
-      loadClasses();
-    }, [loadClasses])
+      loadData();
+    }, [loadData])
   );
 
   const openAddModal = useCallback(() => {
-    setEditingClass(null);
-    setClassName("");
+    setEditingStudent(null);
+    setName("");
+    setPhone("");
+    setDob("");
     setModalVisible(true);
   }, []);
 
-  const openEditModal = useCallback((item: ClassRow) => {
-    setEditingClass(item);
-    setClassName(item.name);
+  const openEditModal = useCallback((item: StudentRow) => {
+    setEditingStudent(item);
+    setName(item.name);
+    setPhone(item.phone ?? "");
+    setDob(item.dob ?? "");
     setModalVisible(true);
   }, []);
 
   const closeModal = useCallback(() => {
     setModalVisible(false);
-    setClassName("");
-    setEditingClass(null);
+    setName("");
+    setPhone("");
+    setDob("");
+    setEditingStudent(null);
   }, []);
 
   const handleSave = useCallback(async () => {
-    const trimmed = className.trim();
-    if (!trimmed) {
-      Alert.alert("Class name required", "Please enter a class name.");
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      Alert.alert("Name required", "Please enter the student's name.");
       return;
     }
 
-    if (editingClass) {
-      await updateClass(editingClass.id, trimmed);
+    if (editingStudent) {
+      await updateStudent(
+        editingStudent.id,
+        trimmedName,
+        phone,
+        dob
+      );
     } else {
-      await createClass(trimmed);
+      await createStudent(classId, trimmedName, phone, dob);
     }
 
     closeModal();
-    await loadClasses();
-  }, [className, closeModal, editingClass, loadClasses]);
+    await loadData();
+  }, [classId, closeModal, dob, editingStudent, loadData, name, phone]);
 
   const handleDelete = useCallback(
-    (item: ClassRow) => {
+    (item: StudentRow) => {
       Alert.alert(
-        "Delete class",
-        `Delete "${item.name}"? Students in this class will also be removed.`,
+        "Delete student",
+        `Delete "${item.name}"?`,
         [
           { text: "Cancel", style: "cancel" },
           {
             text: "Delete",
             style: "destructive",
             onPress: async () => {
-              await deleteClass(item.id);
-              await loadClasses();
+              await deleteStudent(item.id);
+              await loadData();
             },
           },
         ]
       );
     },
-    [loadClasses]
+    [loadData]
   );
 
   return (
     <>
       <Stack.Screen
         options={{
-          title: "Classes",
+          title: className,
           headerRight: () => (
             <Pressable
               onPress={openAddModal}
               className="mr-2 flex-row items-center rounded-lg bg-blue-600 px-3 py-1.5 active:opacity-80"
             >
               <Text className="text-sm font-semibold text-white">
-                + Add Class
+                + Add Student
               </Text>
             </Pressable>
           ),
@@ -117,26 +143,31 @@ export default function ClassesScreen() {
 
       <View className="flex-1 bg-gray-50">
         <FlatList
-          data={classes}
+          data={students}
           keyExtractor={(item) => String(item.id)}
           contentContainerClassName="grow px-4 py-3"
           ListEmptyComponent={
             <View className="flex-1 items-center justify-center py-24">
-              <Text className="text-base text-gray-500">No classes yet</Text>
+              <Text className="text-base text-gray-500">No students yet</Text>
               <Text className="mt-1 text-sm text-gray-400">
-                Tap + Add Class to create one
+                Tap + Add Student to add one
               </Text>
             </View>
           }
           renderItem={({ item }) => (
             <View className="mb-2 flex-row items-center rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
               <Pressable
-                onPress={() => router.push(`/class/${item.id}`)}
+                onPress={() => router.push(`/student/${item.id}`)}
                 className="mr-2 flex-1 active:opacity-70"
               >
                 <Text className="text-base font-medium text-gray-900">
                   {item.name}
                 </Text>
+                {(item.phone || item.dob) && (
+                  <Text className="mt-0.5 text-sm text-gray-500">
+                    {[item.phone, item.dob].filter(Boolean).join(" · ")}
+                  </Text>
+                )}
               </Pressable>
               <Pressable
                 onPress={() => openEditModal(item)}
@@ -172,18 +203,38 @@ export default function ClassesScreen() {
             onPress={(e) => e.stopPropagation()}
           >
             <Text className="text-lg font-semibold text-gray-900">
-              {editingClass ? "Edit Class" : "Add Class"}
+              {editingStudent ? "Edit Student" : "Add Student"}
             </Text>
-            <Text className="mt-1 text-sm text-gray-500">Class Name</Text>
+
+            <Text className="mt-4 text-sm text-gray-500">Name</Text>
             <TextInput
-              className="mt-3 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-base text-gray-900"
-              placeholder="e.g. Grade 10-A"
+              className="mt-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-base text-gray-900"
+              placeholder="Student name"
               placeholderTextColor="#9ca3af"
-              value={className}
-              onChangeText={setClassName}
+              value={name}
+              onChangeText={setName}
               autoFocus
-              onSubmitEditing={handleSave}
             />
+
+            <Text className="mt-3 text-sm text-gray-500">Phone</Text>
+            <TextInput
+              className="mt-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-base text-gray-900"
+              placeholder="Phone number"
+              placeholderTextColor="#9ca3af"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+            />
+
+            <Text className="mt-3 text-sm text-gray-500">Date of birth</Text>
+            <TextInput
+              className="mt-1 rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-base text-gray-900"
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#9ca3af"
+              value={dob}
+              onChangeText={setDob}
+            />
+
             <View className="mt-5 flex-row justify-end gap-2">
               <Pressable
                 onPress={closeModal}
@@ -198,7 +249,7 @@ export default function ClassesScreen() {
                 className="rounded-lg bg-blue-600 px-4 py-2 active:opacity-80"
               >
                 <Text className="text-base font-semibold text-white">
-                  {editingClass ? "Save" : "Add"}
+                  {editingStudent ? "Save" : "Add"}
                 </Text>
               </Pressable>
             </View>
