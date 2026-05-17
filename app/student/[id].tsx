@@ -1,11 +1,11 @@
 import { getClassById } from "@/database/Classes";
 import { getPhotoByStudentId, upsertStudentPhoto } from "@/database/Photos";
 import { getStudentById, updateStudent } from "@/database/Students";
-import { StudentCameraModal } from "@/components/StudentCameraModal";
 import {
   StudentPhotoActionModal,
   StudentPhotoPreviewModal,
 } from "@/components/StudentPhotoModals";
+import { launchNativeCamera } from "@/utils/launchNativeCamera";
 import {
   deleteStudentPhoto,
   migrateStudentPhotoPath,
@@ -48,19 +48,9 @@ export default function StudentDetailScreen() {
   const [dob, setDob] = useState("");
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoVersion, setPhotoVersion] = useState(0);
-  const [cameraVisible, setCameraVisible] = useState(false);
   const [actionModalVisible, setActionModalVisible] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [savingPhoto, setSavingPhoto] = useState(false);
-
-  const handlePhotoPlaceholderPress = useCallback(() => {
-    if (savingPhoto) return;
-    if (photoUri) {
-      setActionModalVisible(true);
-    } else {
-      setCameraVisible(true);
-    }
-  }, [photoUri, savingPhoto]);
 
   const loadStudent = useCallback(async () => {
     if (!studentId || Number.isNaN(studentId)) return;
@@ -128,6 +118,23 @@ export default function StudentDetailScreen() {
     [className, name, photoUri, savedName, studentId]
   );
 
+  const openNativeCamera = useCallback(async () => {
+    if (savingPhoto) return;
+    const uri = await launchNativeCamera();
+    if (uri) {
+      await handlePhotoCapture(uri);
+    }
+  }, [handlePhotoCapture, savingPhoto]);
+
+  const handlePhotoPlaceholderPress = useCallback(() => {
+    if (savingPhoto) return;
+    if (photoUri) {
+      setActionModalVisible(true);
+    } else {
+      openNativeCamera();
+    }
+  }, [photoUri, savingPhoto, openNativeCamera]);
+
   const handleSave = useCallback(async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -169,12 +176,6 @@ export default function StudentDetailScreen() {
     <>
       <Stack.Screen options={{ title: "Student Details" }} />
 
-      <StudentCameraModal
-        visible={cameraVisible}
-        onClose={() => setCameraVisible(false)}
-        onCapture={handlePhotoCapture}
-      />
-
       <StudentPhotoActionModal
         visible={actionModalVisible}
         onClose={() => setActionModalVisible(false)}
@@ -184,7 +185,7 @@ export default function StudentDetailScreen() {
         }}
         onRetake={() => {
           setActionModalVisible(false);
-          setCameraVisible(true);
+          openNativeCamera();
         }}
       />
 
