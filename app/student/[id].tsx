@@ -3,6 +3,10 @@ import { getPhotoByStudentId, upsertStudentPhoto } from "@/database/Photos";
 import { getStudentById, updateStudent } from "@/database/Students";
 import { StudentCameraModal } from "@/components/StudentCameraModal";
 import {
+  StudentPhotoActionModal,
+  StudentPhotoPreviewModal,
+} from "@/components/StudentPhotoModals";
+import {
   deleteStudentPhoto,
   migrateStudentPhotoPath,
   photoFileExists,
@@ -45,7 +49,18 @@ export default function StudentDetailScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoVersion, setPhotoVersion] = useState(0);
   const [cameraVisible, setCameraVisible] = useState(false);
+  const [actionModalVisible, setActionModalVisible] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
   const [savingPhoto, setSavingPhoto] = useState(false);
+
+  const handlePhotoPlaceholderPress = useCallback(() => {
+    if (savingPhoto) return;
+    if (photoUri) {
+      setActionModalVisible(true);
+    } else {
+      setCameraVisible(true);
+    }
+  }, [photoUri, savingPhoto]);
 
   const loadStudent = useCallback(async () => {
     if (!studentId || Number.isNaN(studentId)) return;
@@ -160,6 +175,27 @@ export default function StudentDetailScreen() {
         onCapture={handlePhotoCapture}
       />
 
+      <StudentPhotoActionModal
+        visible={actionModalVisible}
+        onClose={() => setActionModalVisible(false)}
+        onView={() => {
+          setActionModalVisible(false);
+          setPreviewVisible(true);
+        }}
+        onRetake={() => {
+          setActionModalVisible(false);
+          setCameraVisible(true);
+        }}
+      />
+
+      <StudentPhotoPreviewModal
+        visible={previewVisible}
+        photoUri={photoUri}
+        photoVersion={photoVersion}
+        studentName={name.trim() || savedName || "Student"}
+        onClose={() => setPreviewVisible(false)}
+      />
+
       <ScrollView
         className="flex-1 bg-gray-50"
         contentContainerClassName="px-4 py-6"
@@ -167,7 +203,7 @@ export default function StudentDetailScreen() {
       >
         <View className="mb-6 items-center">
           <Pressable
-            onPress={() => setCameraVisible(true)}
+            onPress={handlePhotoPlaceholderPress}
             disabled={savingPhoto}
             className="h-40 w-40 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-white active:opacity-80"
           >
@@ -191,7 +227,7 @@ export default function StudentDetailScreen() {
           </Pressable>
           {hasPhoto && (
             <Text className="mt-2 text-xs text-gray-400">
-              Tap to retake photo
+              Tap to view or retake photo
             </Text>
           )}
         </View>
