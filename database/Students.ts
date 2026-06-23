@@ -51,6 +51,16 @@ export const deleteStudent = async (id: number) => {
   return await db.runAsync('DELETE FROM students WHERE id = ?;', [id])
 }
 
+export const updateStudentPaymentStatus = async (
+  id: number,
+  isPaid: boolean
+) => {
+  return await db.runAsync(
+    'UPDATE students SET is_paid = ? WHERE id = ?;',
+    [isPaid ? 1 : 0, id]
+  )
+}
+
 export type StudentImportRow = {
   name: string
   phone?: string

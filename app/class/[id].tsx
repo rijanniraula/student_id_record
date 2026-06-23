@@ -1,5 +1,11 @@
 import { getClassById } from "@/database/Classes";
 import {
+  FEE_AMOUNT,
+  formatRs,
+  StudentPaymentModal,
+  type StudentPaymentModalRef,
+} from "@/components/StudentPaymentModal";
+import {
   createStudent,
   deleteStudent,
   getStudentsByClass,
@@ -23,7 +29,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -44,6 +50,7 @@ type StudentRow = {
   name: string;
   phone: string | null;
   dob: string | null;
+  is_paid: number;
   photoUri: string | null;
 };
 
@@ -62,6 +69,18 @@ export default function ClassStudentsScreen() {
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const paymentModalRef = useRef<StudentPaymentModalRef>(null);
+
+  const paymentStats = useMemo(() => {
+    const paidCount = students.filter((s) => s.is_paid === 1).length;
+    const unpaidCount = students.length - paidCount;
+
+    return {
+      outstanding: students.length * FEE_AMOUNT,
+      paid: paidCount * FEE_AMOUNT,
+      unpaid: unpaidCount * FEE_AMOUNT,
+    };
+  }, [students]);
 
   const filteredStudents = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -107,7 +126,11 @@ export default function ClassStudentsScreen() {
           photoUri = (await photoFileExists(fallback)) ? fallback : null;
         }
 
-        return { ...student, photoUri };
+        return {
+          ...student,
+          is_paid: student.is_paid ?? 0,
+          photoUri,
+        };
       })
     );
 
@@ -327,7 +350,31 @@ export default function ClassStudentsScreen() {
           contentContainerClassName="grow px-4 pb-3"
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
-            <View className="py-4 flex-row items-center justify-between">
+            <View className="pt-4">
+              <View className="mb-4 flex-row gap-2">
+                <View className="flex-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                  <Text className="text-xs font-medium text-amber-700">
+                    Outstanding
+                  </Text>
+                  <Text className="mt-1 text-base font-bold text-amber-900">
+                    {formatRs(paymentStats.outstanding)}
+                  </Text>
+                </View>
+                <View className="flex-1 rounded-xl border border-green-200 bg-green-50 px-3 py-3">
+                  <Text className="text-xs font-medium text-green-700">Paid</Text>
+                  <Text className="mt-1 text-base font-bold text-green-900">
+                    {formatRs(paymentStats.paid)}
+                  </Text>
+                </View>
+                <View className="flex-1 rounded-xl border border-red-200 bg-red-50 px-3 py-3">
+                  <Text className="text-xs font-medium text-red-700">Unpaid</Text>
+                  <Text className="mt-1 text-base font-bold text-red-900">
+                    {formatRs(paymentStats.unpaid)}
+                  </Text>
+                </View>
+              </View>
+
+              <View className="pb-4 flex-row items-center justify-between">
               <View className="w-[83%] flex-row items-center rounded-xl border border-gray-300 bg-white px-3">
                 <Ionicons name="search" size={20} color="#9ca3af" />
                 <TextInput
@@ -358,6 +405,7 @@ export default function ClassStudentsScreen() {
                 <Entypo name="plus" size={18} color="white" />
                 <Text className="text-sm font-semibold text-white">Add</Text>
               </Pressable>
+              </View>
             </View>
           }
           ListEmptyComponent={
@@ -402,6 +450,32 @@ export default function ClassStudentsScreen() {
                   <Text className="mt-0.5 text-sm text-gray-400">
                   DOB: {item.dob ?? "N/A"}
                   </Text>
+              </Pressable>
+              <View
+                className={`mr-2 rounded-full px-2 py-0.5 ${
+                  item.is_paid === 1
+                    ? "bg-green-100"
+                    : "bg-red-100"
+                }`}
+              >
+                <Text
+                  className={`text-[10px] font-semibold ${
+                    item.is_paid === 1 ? "text-green-700" : "text-red-700"
+                  }`}
+                >
+                  {item.is_paid === 1 ? "Paid" : "Unpaid"}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => paymentModalRef.current?.open(item)}
+                hitSlop={8}
+                className="mr-2 p-1 active:opacity-60"
+              >
+                <Feather
+                  name="dollar-sign"
+                  size={16}
+                  color={item.is_paid === 1 ? "#16a34a" : "#dc2626"}
+                />
               </Pressable>
               <Pressable
                 onPress={() => openEditModal(item)}
@@ -490,6 +564,12 @@ export default function ClassStudentsScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <StudentPaymentModal
+        ref={paymentModalRef}
+        className={className}
+        onPaymentUpdated={loadData}
+      />
     </>
   );
 }

@@ -66,4 +66,9 @@ const migrateStudentsTable = async () => {
   if (!names.has('dob')) {
     await db.execAsync('ALTER TABLE students ADD COLUMN dob TEXT;')
   }
+  if (!names.has('is_paid')) {
+    await db.execAsync(
+      'ALTER TABLE students ADD COLUMN is_paid INTEGER NOT NULL DEFAULT 0;'
+    )
+  }
 }
